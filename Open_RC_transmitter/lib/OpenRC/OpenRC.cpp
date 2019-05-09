@@ -1,0 +1,47 @@
+#include <arduino.h>
+#include "OpenRC.h"
+
+
+OpenRC::OpenRC(){
+}
+
+void OpenRC::Calibration(){
+  
+int subtotal = 0;
+  for (int x = 0; x<16 ; x++){
+        for (int i = 0; i<20; i++){
+        subtotal = subtotal  + analogRead(adcpins[x]);
+        delay(10);
+         }
+
+calibration[x] = subtotal /20;
+subtotal = 0;
+  }
+
+}
+
+uint OpenRC::AdctoAngle (uint adcport){ ///0-15 ass showed in adcpins[]
+  uint adc = analogRead(adcpins[adcport]);
+  int val= 0;
+  uint cal = calibration[adcport] ;
+  if (direction[adcport] == 0) {// 0= direction not reverced
+    if (adc < cal){
+  val = map (adc,0,cal,0+dualrate[adcport],89+trim[adcport]);
+    }
+   else {
+ val = map (adc,cal,4095,89+trim[adcport],180-dualrate[adcport]);
+    }
+  }
+
+  if (direction[adcport] > 0){ // direction reversed
+    if (adc < cal){
+  val = map (adc,0,cal,180-dualrate[adcport],90+trim[adcport]);
+    }
+    else {
+ val = map (adc,cal,4095,90+trim[adcport],0+dualrate[adcport]);
+    }
+  }
+//return direction
+return val;
+}
+
