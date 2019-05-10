@@ -2,96 +2,133 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <OpenRC.h>
+#include <Preferences.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
+OpenRC openrc;// initialize openRC
+Preferences preferences;
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
 
- /// adc pins to which switches are connected in sequence
-///clases
-OpenRC openrc;
-
-//////defines
-
-
-// Global copy of slave1
-
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+//ESPNOW setup
 esp_now_peer_info_t slave;
 #define CHANNEL 3
 #define PRINTSCANRESULTS 0
-#define DELETEBEFOREPAIR 0
+#define DELETEBEFOREPAIR 1
+
+
+
 ///////function prototypes
 
 int AdctoAngle (int adc, int cal);
 int calibrate (int pin);
 void InitESPNow() ;
-void ScanForSlave() ;
+bool ScanForSlave() ;
 bool manageSlave() ;
 void deletePeer() ;
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
-void sendData(uint8_t values[16]) ;
-//////Global Variables
-
-
-
-void setup() {
- 
+void sendData();
+void OpenRCloop();
+void GetData();
+void SaveData();
+bool lookforSlave();
+void Menu();
+void SavedSlave();
+///////////////
+void setup() { //Setup loop
 Serial.begin(115200);
-  //Setup all ADC pins in a sequence
+  pinMode(4,INPUT_PULLUP);
+ // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
+   
 
-  openrc.Calibration(); //calibrate default readings to 90 degree angle
-//print 3 calibrations
-Serial.println(openrc.calibration[0]);
-Serial.println(openrc.calibration[1]);
-Serial.println(openrc.calibration[2]);
+
   ////////Wifi stuff
+
+
+//openrc.direction[0] = 1; // Direction change 0 default 1 reverse
+//openrc.dualrate[0] = 10; //dualrate only positive 0-180
+//openrc.trim[0] = -10; // trim positive or negative of -90 - +90 degree
+
+
+//SaveData();
+//GetData();
+
+Menu ();
 WiFi.mode(WIFI_STA);
     // Init ESPNow with a fallback logic
 InitESPNow();
   // Once ESPNow is successfully Init, we will register for Send CB to
   // get the status of Trasnmitted packet
 esp_now_register_send_cb(OnDataSent);
-ScanForSlave();
+//ScanForSlave();
+
+SavedSlave();
+OpenRCloop();
 }
 
 void loop() {
-
-//openrc.direction[0] = 1; // Direction change 0 default 1 reverse
-//openrc.dualrate[0] = 10; //dualrate only positive 0-180
-//openrc.trim[0] = -10; // trim positive or negative of -90 - +90 degree
-Serial.println(openrc.AdctoAngle(0));
-Serial.println(" ");
-Serial.print(openrc.AdctoAngle(1));
-Serial.println(" ");
-Serial.print(openrc.AdctoAngle(2));
-Serial.println(" ");
-delay(100);
+ sendData();
 
 
   
-  // If Slave is found, it would be populate in `slave` variable
+delay(500);
+}
+
+
+
+
+void GetData(){
+preferences.begin("my-app", false);
+preferences.getBytes("Calibration", &openrc.calibration, 6);
+preferences.getBytes("Direction", &openrc.direction, 6);
+preferences.getBytes("Dualrate", &openrc.dualrate, 6);
+// Close the Preferences
+  preferences.end();
+
+}
+
+void SaveData(){
+
+preferences.begin("my-app", false);
+preferences.putBytes("Calibration", &openrc.calibration, 6);
+preferences.putBytes("Direction", &openrc.direction, 6);
+preferences.putBytes("Dualrate", &openrc.dualrate, 6);
+
+// Close the Preferences
+  preferences.end();
+
+}
+
+void OpenRCloop(){
+ // If Slave is found, it would be populate in `slave` variable
   // We will check if `slave` is defined and then we proceed further
   if (slave.channel == CHANNEL) { // check if slave channel is defined
     // `slave` is defined
     // Add slave as peer if it has not been added already
-    bool isPaired = manageSlave();
+bool isPaired = manageSlave(); 
+//bool isPaired = lookforSlave(); //do not add new
     if (isPaired) {
       // pair success or already paired
       // Send data to device
-      ///////send agle 0-180 for each "servo"
-      uint8_t values[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,255,16};
-      sendData(values);
+     
+      sendData(); //Send Data for all 16 chanels
     } else {
       // slave pair failed
       Serial.println("Slave pair failed!");
+      
     }
   }
   else {
     // No slave found to process
+ //ScanForSlave(); // look for one
+//oldScanForSlave();
   }
 
-  // wait for 3seconds to run the logic again
-
 }
-
-
 
 ////////////////
 // Init ESP Now with fallback
@@ -109,8 +146,22 @@ void InitESPNow() {
   }
 }
 
+
+void SavedSlave() {
+    memset(&slave, 0, sizeof(slave));
+preferences.begin("my-app", false);
+preferences.getBytes("mac", &slave.peer_addr, 6);
+preferences.end();
+        
+       
+
+        slave.channel = CHANNEL; // pick a channel
+        slave.encrypt = 0; // no encryption
+
+}
+
 // Scan for slaves in AP mode
-void ScanForSlave() {
+bool ScanForSlave() {
   int8_t scanResults = WiFi.scanNetworks();
   // reset on each scan
   bool slaveFound = 0;
@@ -149,6 +200,9 @@ void ScanForSlave() {
             slave.peer_addr[ii] = (uint8_t) mac[ii];
           }
         }
+preferences.begin("my-app", false);
+preferences.putBytes("mac", &slave.peer_addr, 6);
+preferences.end();
 
         slave.channel = CHANNEL; // pick a channel
         slave.encrypt = 0; // no encryption
@@ -160,19 +214,24 @@ void ScanForSlave() {
       }
     }
   }
-
+  WiFi.scanDelete();
   if (slaveFound) {
     Serial.println("Slave Found, processing..");
+    return 1;
   } else {
     Serial.println("Slave Not Found, trying again.");
+    return 0;
   }
 
   // clean up ram
-  WiFi.scanDelete();
+
 }
 
 // Check if the slave is already paired with the master.
 // If not, pair the slave with master
+
+
+
 bool manageSlave() {
   if (slave.channel == CHANNEL) {
     if (DELETEBEFOREPAIR) {
@@ -245,15 +304,17 @@ void deletePeer() {
 
 
 // send data
-void sendData( uint8_t *data) {
+void sendData( ) {
   
   uint8_t values[16];  //gettng the array values into local array so we can send it out might be better ways to do it
-      for(int x=0; x<16; x++)
+      for(int x=0; x<=5; x++)
     {
-      values[x] = *data;
-        data++;
+      values[x] = openrc.AdctoAngle(x);//read all ADC convert to degrees and get ready to send
     }
-  
+     for(int x=6; x<16; x++)
+    {
+      values[x] = openrc.IOtoAngle(x-6);//
+    }
   const uint8_t *peer_addr = slave.peer_addr;
   Serial.print("Sending: "); 
   //esp_err_t result = esp_now_send(peer_addr, &data, sizeof(data));
@@ -285,3 +346,222 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.print("Last Packet Sent to: "); Serial.println(macStr);
   Serial.print("Last Packet Send Status: "); Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
+//////////////////ugly menu system///////////////////
+void Menu (){
+  int level =0;
+  int step = 0;
+ // int substep =0;
+  int exit = 1;
+
+  //int okpin = 4;
+  display.clearDisplay();
+    display.setTextColor(WHITE); //setting the color
+    display.setTextSize(1); //set the font size
+  while (exit == 1){
+     while (level == 0){
+      /////////////////
+    if (analogRead(A3) == 0)  { step++; delay(200);  }
+    if (analogRead(A3) > 4000){ step--; delay(200);  }
+
+switch (step) {
+
+      case 0:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("   OpenRC Start      ");
+              display.setTextColor(WHITE);
+              display.print("Calibrate            ");
+              display.print("Configure            ");
+              display.print("Bind                 ");
+              display.display();
+              if (digitalRead(4) == LOW){
+              exit = 0;
+              level = 999;
+              delay(200);
+              }
+
+      break;
+
+      case 1:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.print("   OpenRC Start      ");
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Calibrate            ");
+              display.setTextColor(WHITE);
+              display.print("Configure            ");
+              display.print("Bind                 ");
+              display.display();
+              if (digitalRead(4) == LOW){
+               level = 1;
+               step = 0;
+               delay(200);
+              }
+      break;
+
+      case 2:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.print("   OpenRC Start      ");
+              display.print("Calibrate            ");
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Configure            ");
+              display.setTextColor(WHITE);
+              display.print("Bind                 ");
+              display.display();
+      break;
+
+      case 3:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.print("   OpenRC Start      ");
+              display.print("Calibrate            ");
+              display.print("Configure            ");
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Bind                 ");
+              display.setTextColor(WHITE);
+              display.display();
+               if (digitalRead(4) == LOW){
+               level = 3;
+               step = 0;
+               delay(200);
+              }
+      break;
+      default:
+        step = 0;
+       
+
+}
+  }
+  while (level == 1){
+     if (analogRead(A3) == 0)  { step++; delay(200);  }
+    if (analogRead(A3) > 4000){ step--; delay(200);  }
+  switch (step) {
+      case 0:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Start  Calibration   ");
+              display.setTextColor(WHITE);
+              display.print("Exit                 ");
+              display.print("                     ");
+                   display.display();      
+              if (digitalRead(4) == LOW){
+              openrc.Calibration(); //calibrate default readings to 90 degree angle
+                  //print 3 calibrations
+              Serial.println(openrc.calibration[0]);
+              Serial.println(openrc.calibration[1]);
+              Serial.println(openrc.calibration[2]);
+             step = 5;
+             delay(200);
+              }
+            
+              
+      break;
+
+      case 1:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.print("Start  Calibration   ");
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Exit                 ");
+              display.setTextColor(WHITE);
+              display.print("                     ");
+              display.print("                     ");
+              display.display();
+              if (digitalRead(4) == LOW){
+               level = 0;
+               step = 0;
+               delay(200);
+              }
+      break;
+
+      case 5:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Start  Calibration   ");
+              display.setTextColor(WHITE);
+              display.print("Exit                 ");
+               display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Calibration Finished ");
+              display.setTextColor(WHITE);
+              display.display();
+      break;
+      default:
+        step = 0;
+       
+
+}
+  }
+  
+   while (level == 3){/// binding
+     if (analogRead(A3) == 0)  { step++; delay(200);  }
+    if (analogRead(A3) > 4000){ step--; delay(200);  }
+      switch (step) {
+      case 0:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Bind a new device    ");
+              display.setTextColor(WHITE);
+              display.print("Exit                 ");
+              display.print("                     ");
+              display.print("                     ");
+              display.display();      
+              if (digitalRead(4) == LOW){
+              // level = 0;
+               //step = 5;
+               delay(200);
+                // scan and add new device
+                bool found = ScanForSlave();
+                 if (found == 0)step = 10;
+                  if (found == 1)step = 5;
+                
+
+              }
+      break;
+      case 1:
+              display.clearDisplay(); display.setCursor(0,0);
+              display.print("Bind a new device    ");
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Exit                 ");
+              display.setTextColor(WHITE);
+              display.print("                     ");
+              display.print("                     ");
+              display.display();      
+              if (digitalRead(4) == LOW){
+               level = 0;
+               step = 0;
+               delay(200);
+              }
+      break;
+
+      case 5:
+
+              display.clearDisplay(); display.setCursor(0,0);
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Bind a new device    ");
+              display.setTextColor(WHITE);
+              display.print("Exit                 ");
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("New Device paired    ");
+              display.print("                     ");
+              display.setTextColor(WHITE);
+              display.display();      
+      break;
+
+       case 10:
+
+              display.clearDisplay(); display.setCursor(0,0);
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Bind a new device    ");
+              display.setTextColor(WHITE);
+              display.print("Exit                 ");
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("No Device Found      ");
+              display.print("                     ");
+              display.setTextColor(WHITE);
+              display.display();      
+      break;
+
+      default:
+        step = 0;
+        }
+     }
+
+}
+  }

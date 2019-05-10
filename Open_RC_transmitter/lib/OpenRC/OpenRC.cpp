@@ -8,7 +8,7 @@ OpenRC::OpenRC(){
 void OpenRC::Calibration(){
   
 int subtotal = 0;
-  for (int x = 0; x<16 ; x++){
+  for (int x = 0; x<5 ; x++){
         for (int i = 0; i<20; i++){
         subtotal = subtotal  + analogRead(adcpins[x]);
         delay(10);
@@ -20,7 +20,8 @@ subtotal = 0;
 
 }
 
-uint OpenRC::AdctoAngle (uint adcport){ ///0-15 ass showed in adcpins[]
+uint OpenRC::AdctoAngle (uint adcport){ ///0-5ass showed in adcpins[]
+
   uint adc = analogRead(adcpins[adcport]);
   int val= 0;
   uint cal = calibration[adcport] ;
@@ -45,3 +46,19 @@ uint OpenRC::AdctoAngle (uint adcport){ ///0-15 ass showed in adcpins[]
 return val;
 }
 
+
+uint OpenRC::IOtoAngle (uint ioport){ 
+uint IOin = digitalRead(digipins[ioport]);
+  int val= 0;
+  if (IOin == HIGH){
+    val = 90;
+  }
+
+  if (IOin == LOW){
+    val = 180;
+  }
+
+//return direction
+return val;
+
+}
