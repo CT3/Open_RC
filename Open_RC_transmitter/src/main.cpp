@@ -10,16 +10,17 @@
 OpenRC openrc;// initialize openRC
 Preferences preferences;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 32 // OLED display height, in pixels
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 //ESPNOW setup
 esp_now_peer_info_t slave;
 #define CHANNEL 3
 #define PRINTSCANRESULTS 0
 #define DELETEBEFOREPAIR 1
 
-
+#define JOYA 33
+#define BUTA 13
 
 ///////function prototypes
 
@@ -40,22 +41,33 @@ void SavedSlave();
 ///////////////
 void setup() { //Setup loop
 Serial.begin(115200);
-  pinMode(4,INPUT_PULLUP);
+
  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
    
-
-
+//SETUP GPIO
+pinMode(14,INPUT_PULLUP);
+pinMode(12,INPUT_PULLUP);
+pinMode(19,INPUT_PULLUP);
+pinMode(13,INPUT_PULLUP);
   ////////Wifi stuff
 
 
 //openrc.direction[0] = 1; // Direction change 0 default 1 reverse
 //openrc.dualrate[0] = 10; //dualrate only positive 0-180
 //openrc.trim[0] = -10; // trim positive or negative of -90 - +90 degree
+////////////////
+display.clearDisplay(); display.setCursor(0,0);
+              display.setTextColor(BLACK, WHITE); // Draw 'inverse' text
+              display.print("Open RC");
+display.display();
 
+
+
+/////////
 
 //SaveData();
-//GetData();
+GetData();
 
 Menu ();
 WiFi.mode(WIFI_STA);
@@ -65,7 +77,7 @@ InitESPNow();
   // get the status of Trasnmitted packet
 esp_now_register_send_cb(OnDataSent);
 //ScanForSlave();
-
+//openrc.Calibration();
 SavedSlave();
 OpenRCloop();
 }
@@ -360,8 +372,8 @@ void Menu (){
   while (exit == 1){
      while (level == 0){
       /////////////////
-    if (analogRead(A3) == 0)  { step++; delay(200);  }
-    if (analogRead(A3) > 4000){ step--; delay(200);  }
+    if (analogRead(JOYA) == 0)  { step++; delay(200);  }
+    if (analogRead(JOYA) > 4000){ step--; delay(200);  }
 
 switch (step) {
 
@@ -374,7 +386,7 @@ switch (step) {
               display.print("Configure            ");
               display.print("Bind                 ");
               display.display();
-              if (digitalRead(4) == LOW){
+              if (digitalRead(BUTA) == LOW){
               exit = 0;
               level = 999;
               delay(200);
@@ -391,7 +403,7 @@ switch (step) {
               display.print("Configure            ");
               display.print("Bind                 ");
               display.display();
-              if (digitalRead(4) == LOW){
+              if (digitalRead(BUTA) == LOW){
                level = 1;
                step = 0;
                delay(200);
@@ -418,7 +430,7 @@ switch (step) {
               display.print("Bind                 ");
               display.setTextColor(WHITE);
               display.display();
-               if (digitalRead(4) == LOW){
+               if (digitalRead(BUTA) == LOW){
                level = 3;
                step = 0;
                delay(200);
@@ -431,8 +443,8 @@ switch (step) {
 }
   }
   while (level == 1){
-     if (analogRead(A3) == 0)  { step++; delay(200);  }
-    if (analogRead(A3) > 4000){ step--; delay(200);  }
+     if (analogRead(JOYA) == 0)  { step++; delay(200);  }
+    if (analogRead(JOYA) > 4000){ step--; delay(200);  }
   switch (step) {
       case 0:
               display.clearDisplay(); display.setCursor(0,0);
@@ -442,12 +454,27 @@ switch (step) {
               display.print("Exit                 ");
               display.print("                     ");
                    display.display();      
-              if (digitalRead(4) == LOW){
+              if (digitalRead(BUTA) == LOW){
               openrc.Calibration(); //calibrate default readings to 90 degree angle
                   //print 3 calibrations
+                  /////
+                Serial.println("Calibration");
               Serial.println(openrc.calibration[0]);
               Serial.println(openrc.calibration[1]);
               Serial.println(openrc.calibration[2]);
+              Serial.println(openrc.calibration[3]);
+              Serial.println("dualrate");
+              Serial.println(openrc.dualrate[0]);
+              Serial.println(openrc.dualrate[1]);
+              Serial.println(openrc.dualrate[2]);
+              Serial.println(openrc.dualrate[3]);
+                Serial.println("direction");
+              Serial.println(openrc.direction[0]);
+              Serial.println(openrc.direction[1]);
+              Serial.println(openrc.direction[2]);
+              Serial.println(openrc.direction[3]);
+              SaveData();
+
              step = 5;
              delay(200);
               }
@@ -464,7 +491,7 @@ switch (step) {
               display.print("                     ");
               display.print("                     ");
               display.display();
-              if (digitalRead(4) == LOW){
+              if (digitalRead(BUTA) == LOW){
                level = 0;
                step = 0;
                delay(200);
@@ -490,8 +517,8 @@ switch (step) {
   }
   
    while (level == 3){/// binding
-     if (analogRead(A3) == 0)  { step++; delay(200);  }
-    if (analogRead(A3) > 4000){ step--; delay(200);  }
+     if (analogRead(JOYA) == 0)  { step++; delay(200);  }
+    if (analogRead(JOYA) > 4000){ step--; delay(200);  }
       switch (step) {
       case 0:
               display.clearDisplay(); display.setCursor(0,0);
@@ -502,7 +529,7 @@ switch (step) {
               display.print("                     ");
               display.print("                     ");
               display.display();      
-              if (digitalRead(4) == LOW){
+              if (digitalRead(BUTA) == LOW){
               // level = 0;
                //step = 5;
                delay(200);
@@ -523,7 +550,7 @@ switch (step) {
               display.print("                     ");
               display.print("                     ");
               display.display();      
-              if (digitalRead(4) == LOW){
+              if (digitalRead(BUTA) == LOW){
                level = 0;
                step = 0;
                delay(200);

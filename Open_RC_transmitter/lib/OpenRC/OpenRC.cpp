@@ -8,14 +8,16 @@ OpenRC::OpenRC(){
 void OpenRC::Calibration(){
   
 int subtotal = 0;
-  for (int x = 0; x<5 ; x++){
+  for (int x = 0; x<6 ; x++){
         for (int i = 0; i<20; i++){
         subtotal = subtotal  + analogRead(adcpins[x]);
-        delay(10);
+        delay(50);
          }
 
 calibration[x] = subtotal /20;
+//Serial.println(calibration[x]);
 subtotal = 0;
+delay(50);
   }
 
 }
@@ -23,6 +25,7 @@ subtotal = 0;
 uint OpenRC::AdctoAngle (uint adcport){ ///0-5ass showed in adcpins[]
 
   uint adc = analogRead(adcpins[adcport]);
+  //Serial.println(adc);
   int val= 0;
   uint cal = calibration[adcport] ;
   if (direction[adcport] == 0) {// 0= direction not reverced
