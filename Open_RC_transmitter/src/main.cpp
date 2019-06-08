@@ -6,7 +6,9 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <MPU6050_tockn.h>
 
+MPU6050 mpu6050(Wire);
 OpenRC openrc;// initialize openRC
 Preferences preferences;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -68,7 +70,8 @@ display.display();
 
 //SaveData();
 GetData();
-
+  mpu6050.begin();
+  
 Menu ();
 WiFi.mode(WIFI_STA);
     // Init ESPNow with a fallback logic
@@ -80,14 +83,46 @@ esp_now_register_send_cb(OnDataSent);
 //openrc.Calibration();
 SavedSlave();
 OpenRCloop();
+delay(1000);
+display.clearDisplay();
+display.display();
+
 }
 
 void loop() {
  sendData();
+/*   mpu6050.update();
+  Serial.print("angleX : ");
+  Serial.print(mpu6050.getAngleX());
+  Serial.print("\tangleY : ");
+  Serial.print(mpu6050.getAngleY());
+  Serial.print("\tangleZ : ");
+  Serial.println(mpu6050.getAngleZ()); */
 
+  display.clearDisplay(); 
 
+  display.setCursor(1,1);
   
-delay(500);
+  //display.print(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success          " : "Delivery Fail        ");
+    int values[16];  //gettng the array values into local array so we can send it out might be better ways to do it
+      for(int x=0; x<=5; x++)
+    {
+      values[x] = openrc.AdctoAngle(x);//read all ADC convert to degrees and get ready to send
+      
+    }
+     for(int x=6; x<16; x++)
+    {
+      values[x] = openrc.IOtoAngle(x-6);//
+    }
+
+ for(int z=0; z<=16; z++){
+display.print(values[z]);
+display.print(",");
+ }
+
+  display.display();
+
+delay(50);
 }
 
 
@@ -322,11 +357,13 @@ void sendData( ) {
       for(int x=0; x<=5; x++)
     {
       values[x] = openrc.AdctoAngle(x);//read all ADC convert to degrees and get ready to send
+      
     }
      for(int x=6; x<16; x++)
     {
       values[x] = openrc.IOtoAngle(x-6);//
     }
+
   const uint8_t *peer_addr = slave.peer_addr;
   Serial.print("Sending: "); 
   //esp_err_t result = esp_now_send(peer_addr, &data, sizeof(data));
@@ -357,6 +394,9 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
   Serial.print("Last Packet Sent to: "); Serial.println(macStr);
   Serial.print("Last Packet Send Status: "); Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+/////////////////
+ 
+  
 }
 //////////////////ugly menu system///////////////////
 void Menu (){
@@ -458,6 +498,7 @@ switch (step) {
               openrc.Calibration(); //calibrate default readings to 90 degree angle
                   //print 3 calibrations
                   /////
+                  mpu6050.calcGyroOffsets(true);
                 Serial.println("Calibration");
               Serial.println(openrc.calibration[0]);
               Serial.println(openrc.calibration[1]);

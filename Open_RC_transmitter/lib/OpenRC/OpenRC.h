@@ -13,8 +13,8 @@ class OpenRC
   void Calibration();
   uint AdctoAngle (uint adcport);
   uint IOtoAngle (uint adcport);
-  uint calibration[6];
-  uint direction[6] = {0,0,0,0,0,0};
+  uint calibration[6]= {1800,1800,1850,1850,1800,1800};
+  uint direction[6] = {0,0,1,1,1,0};
   uint dualrate[6]= {0,0,0,0,0,0};
   int trim[6];
   //uint8_t adcpins[6] = {34,35,32,33,36,39}; 
